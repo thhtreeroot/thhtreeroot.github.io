@@ -1,0 +1,263 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>ret2dllresolve学习-1 | Lucky</title><meta name="author" content="Lucky"><meta name="copyright" content="Lucky"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="核心概念先行 动态链接库: 代码和数据的共享库，如 libc.so.6。它们被编译为位置无关代码，意味着它们可以被加载到进程地址空间的任何位置而无需修改代码本身。  全局偏移表: 位于程序的数据段，为每个被程序引用的外部函数或全局变量提供一个槽。它是重定位发生的关键数据结构。  过程链接表: 位于程序的代码段，包含一小段蹦床代码。当程序调用一个共享库函数时，它实际上调用的是 PLT 中的对应条目。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="ret2dllresolve学习-1">
+<meta property="og:url" content="http://example.com/2025/11/26/ret2dlllresolve_1/index.html">
+<meta property="og:site_name" content="Lucky">
+<meta property="og:description" content="核心概念先行 动态链接库: 代码和数据的共享库，如 libc.so.6。它们被编译为位置无关代码，意味着它们可以被加载到进程地址空间的任何位置而无需修改代码本身。  全局偏移表: 位于程序的数据段，为每个被程序引用的外部函数或全局变量提供一个槽。它是重定位发生的关键数据结构。  过程链接表: 位于程序的代码段，包含一小段蹦床代码。当程序调用一个共享库函数时，它实际上调用的是 PLT 中的对应条目。">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://example.com/img/butterfly-icon.png">
+<meta property="article:published_time" content="2025-11-26T15:27:00.000Z">
+<meta property="article:modified_time" content="2025-11-26T15:32:23.501Z">
+<meta property="article:author" content="Lucky">
+<meta property="article:tag" content="ctf">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://example.com/img/butterfly-icon.png"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "ret2dllresolve学习-1",
+  "url": "http://example.com/2025/11/26/ret2dlllresolve_1/",
+  "image": "http://example.com/img/butterfly-icon.png",
+  "datePublished": "2025-11-26T15:27:00.000Z",
+  "dateModified": "2025-11-26T15:32:23.501Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "Lucky",
+      "url": "http://example.com"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/img/favicon.png"><link rel="canonical" href="http://example.com/2025/11/26/ret2dlllresolve_1/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css?v=5.5.1"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/all.min.css"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: undefined,
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":true},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'null',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.12.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'ret2dllresolve学习-1',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><meta name="generator" content="Hexo 8.1.1"></head><body><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/img/butterfly-icon.png" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">4</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">1</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">0</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> Home</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fas fa-list"></i><span> List</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/music/"><i class="fa-fw fas fa-music"></i><span> Music</span></a></li><li><a class="site-page child" href="/movies/"><i class="fa-fw fas fa-video"></i><span> Movie</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/link/"><i class="fa-fw fas fa-link"></i><span> Link</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> Tags</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">Lucky</span></a><a class="nav-page-title" href="/"><span class="site-name">ret2dllresolve学习-1</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> Home</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fas fa-list"></i><span> List</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/music/"><i class="fa-fw fas fa-music"></i><span> Music</span></a></li><li><a class="site-page child" href="/movies/"><i class="fa-fw fas fa-video"></i><span> Movie</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/link/"><i class="fa-fw fas fa-link"></i><span> Link</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> Tags</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">ret2dllresolve学习-1</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2025-11-26T15:27:00.000Z" title="发表于 2025-11-26 23:27:00">2025-11-26</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2025-11-26T15:32:23.501Z" title="更新于 2025-11-26 23:32:23">2025-11-26</time></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><h1 id="核心概念先行"><a href="#核心概念先行" class="headerlink" title="核心概念先行"></a>核心概念先行</h1><ul>
+<li><p>动态链接库: 代码和数据的共享库，如 libc.so.6。它们被编译为位置无关代码，意味着它们可以被加载到进程地址空间的任何位置而无需修改代码本身。</p>
+</li>
+<li><p>全局偏移表: 位于程序的数据段，为每个被程序引用的外部函数或全局变量提供一个槽。它是重定位发生的关键数据结构。</p>
+</li>
+<li><p>过程链接表: 位于程序的代码段，包含一小段蹦床代码。当程序调用一个共享库函数时，它实际上调用的是 PLT 中的对应条目。</p>
+</li>
+<li><p>重定位条目: 存储在可执行文件和共享库中的元数据，明确告诉动态链接器：“在地址 X 处，你需要用符号 Y 的实际地址进行修补，修补方式为类型 Z”。</p>
+</li>
+</ul>
+<h2 id="详细重定位过程（以-printf-为例）"><a href="#详细重定位过程（以-printf-为例）" class="headerlink" title="详细重定位过程（以 printf 为例）"></a>详细重定位过程（以 printf 为例）</h2><p>我们将过程分为三个阶段：启动时、第一次调用时、以及后续调用时。</p>
+<h3 id="阶段一：程序启动与初始重定位"><a href="#阶段一：程序启动与初始重定位" class="headerlink" title="阶段一：程序启动与初始重定位"></a>阶段一：程序启动与初始重定位</h3><p>这一步主要解决“找到库在哪里”和“设置基本通信设施”的问题。</p>
+<ul>
+<li>内核加载与启动解释器</li>
+</ul>
+<p>当你执行 .&#x2F;program 时，内核首先检查 program 的 ELF 头，发现它需要一个动态链接器。</p>
+<p>ELF 头中指定了动态链接器的路径，通常是 &#x2F;lib64&#x2F;ld-linux-x86-64.so.2。</p>
+<p>内核将程序本身和动态链接器映射到进程的虚拟地址空间，然后将控制权交给动态链接器的入口点。此时，还没有任何共享库（如 libc.so.6）被加载。</p>
+<ul>
+<li>动态链接器自举</li>
+</ul>
+<p>动态链接器首先进行自举：它必须在不依赖任何其他库的情况下，初始化自己所需的基本数据结构。</p>
+<ul>
+<li>加载依赖的共享库</li>
+</ul>
+<p>动态链接器读取可执行文件的 .dynamic 段，找到其依赖的库列表。</p>
+<p>它按照依赖关系，广度优先或深度优先地加载所有需要的共享库（如 libc.so.6, libm.so.6 等）到内存中。库的加载地址通常是随机的。</p>
+<ul>
+<li>符号解析与初始重定位</li>
+</ul>
+<p>现在，动态链接器拥有了一个所有已加载模块（可执行文件和所有共享库）的全局符号表。</p>
+<p>它遍历可执行文件和每个共享库中的重定位表（例如 .rela.plt, .rela.dyn）。</p>
+<ul>
+<li>对于 GOT 的初始填充：</li>
+</ul>
+<p>在 program 的 GOT 中，有一些条目需要在启动时就解析。例如，对于全局变量，动态链接器会直接查找该变量的地址，并将其写入 GOT 的对应槽中。</p>
+<p>然而，对于函数（如 printf），为了追求启动速度，现代系统默认采用延迟绑定。这意味着，对于函数引用，GOT 的初始值并不是 printf 的真实地址。</p>
+<p>此时，动态链接器会将 printf 在 GOT 中的条目，初始化为指向其对应的 PLT 条目中的第二条指令的地址（我们稍后会看到为什么）。更常见的实现是，初始化为一个指向动态链接器解析例程的地址，但为了概念清晰，我们按前者描述。</p>
+<p>至此，程序启动完成，main 函数被调用。但 printf 的地址还没有被解析。</p>
+<h3 id="阶段二：第一次调用-printf-——-延迟绑定的魔力"><a href="#阶段二：第一次调用-printf-——-延迟绑定的魔力" class="headerlink" title="阶段二：第一次调用 printf —— 延迟绑定的魔力"></a>阶段二：第一次调用 printf —— 延迟绑定的魔力</h3><p>这是重定位最核心、最精妙的部分。</p>
+<ul>
+<li>调用 PLT 条目</li>
+</ul>
+<p>你的代码 call printf 在编译后，实际上被翻译成了 call printf@plt。</p>
+<p>printf@plt 是程序内部 PLT 段中的一个条目。它看起来像这样（x86_64 汇编）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">// PLT[0] (特殊的调度例程，由其他PLT条目使用)</span><br><span class="line">PLT0: push GOT[1]       // 将GOT[1]（标识信息）压栈</span><br><span class="line">      jmp  *GOT[2]      // 跳转到GOT[2]（动态链接器的解析函数地址）</span><br><span class="line">// printf的PLT条目 (PLT[n])</span><br><span class="line">printf@plt:</span><br><span class="line">    jmp  *GOT[n]       // **第一次调用时，GOT[n]指向下一条指令**</span><br><span class="line">    push $index        // 将重定位索引`index`(与printf对应)压栈</span><br><span class="line">    jmp  PLT0          // 跳转到公共的PLT[0]</span><br></pre></td></tr></table></figure>
+<ul>
+<li>第一次调用的执行流</li>
+</ul>
+<p>jmp *GOT[n]: 这是第一次调用。如前所述，GOT[n] 指向的是下一条 push 指令。所以这个跳转实际上什么都没做，只是落到了下一条指令。</p>
+<p>push $index: 将一个数字 index（称为重定位偏移）压入栈。这个 index 唯一地标识了 printf 在重定位表中的条目。</p>
+<p>jmp PLT0: 跳转到公共的 PLT 入口。</p>
+<p>PLT0 的代码：</p>
+<p>push GOT[1]: 将另一个标识信息（通常是代表当前可执行文件或库的 link_map 结构地址）压栈。现在栈上有了 (GOT[1], index) 这两个参数。</p>
+<p>jmp *GOT[2]: 跳转到 GOT[2] 中存储的地址，这个地址在启动时已被动态链接器初始化为其内部的符号解析函数（例如 _dl_runtime_resolve_xsave）的地址。</p>
+<ul>
+<li>动态链接器执行解析</li>
+</ul>
+<p>控制权现在交给了动态链接器的 _dl_runtime_resolve 函数。</p>
+<p>该函数从栈上弹出 index 和 link_map。</p>
+<p>它使用 link_map 找到当前模块的重定位表。</p>
+<p>使用 index 作为索引，在重定位表中找到 printf 对应的重定位条目 R_X86_64_JUMP_SLOT。</p>
+<p>这个条目告诉链接器：“需要修改的地址是 GOT[n]”。</p>
+<p>链接器现在开始进行符号解析：</p>
+<p>它在全局符号表中查找字符串 “printf”。</p>
+<p>它遍历所有已加载的库，最终在 libc.so.6 中找到 printf 的函数地址。</p>
+<ul>
+<li>重定位（修补 GOT）</li>
+</ul>
+<p>链接器获取到 printf 在内存中的实际地址。</p>
+<p><strong>它执行最关键的一步</strong>：将这个实际地址写回到 program 的 GOT[n] 中。 这就是重定位——直接修改全局偏移表。</p>
+<p>跳转到目标函数并返回</p>
+<p>链接器然后跳转到刚刚找到的 printf 的真实地址，开始执行 printf 函数。</p>
+<p>printf 执行完毕后，返回到你的程序中，也就是最初 call printf@plt 的下一条指令。</p>
+<p>关键点： 至此，printf 在 GOT 中的条目已经被永久性地修补为正确的地址。</p>
+<h3 id="阶段三：后续所有对-printf-的调用"><a href="#阶段三：后续所有对-printf-的调用" class="headerlink" title="阶段三：后续所有对 printf 的调用"></a>阶段三：后续所有对 printf 的调用</h3><p>这个过程极其高效，因为重定位只发生一次。</p>
+<ul>
+<li>调用 PLT 条目</li>
+</ul>
+<p>你的代码依然执行 call printf@plt。</p>
+<p>PLT 条目的行为</p>
+<p>printf@plt 的第一条指令：jmp *GOT[n]。</p>
+<p>现在，GOT[n] 已经被修补为 printf 的真实地址。</p>
+<p>因此，这条指令直接跳转到了 libc.so.6 中的 printf 函数。</p>
+<p>push 和 jmp PLT0 这两条指令被完全跳过。</p>
+<p>后续调用的路径变得非常短：你的代码 -&gt; PLT的一条jmp指令 -&gt; 真实的函数。</p>
+<h2 id="总结与要点"><a href="#总结与要点" class="headerlink" title="总结与要点"></a>总结与要点</h2><p>角色分离：</p>
+<ul>
+<li><p>PLT 是代码，不可写。它提供了一段稳定的、可供调用的蹦床代码。</p>
+</li>
+<li><p>GOT 是数据，可写。它是重定位发生的目标，充当了 PLT 和真实函数地址之间的间接指针。</p>
+</li>
+<li><p>延迟绑定的优势：程序启动时不需要解析所有可能用到的函数，大大加快了启动速度。只有那些实际被调用的函数才会产生解析和重定位的开销。</p>
+</li>
+<li><p>重定位的本质：是动态链接器在运行时，根据符号名找到其在内存中的绝对地址，然后将这个地址写回 GOT 中对应的槽。这个过程将间接跳转的指针从“指向解析器”修正为“指向真实目标”。</p>
+</li>
+<li><p>安全性：现代系统使用只读重映射来保护部分 GOT，但 JUMP_SLOT 类型的重定位需要写入，所以它所在的 GOT 部分是可写的。</p>
+</li>
+<li><p>这个过程是 Linux 动态链接能力的基石，它优雅地平衡了代码共享、地址空间随机化和运行时性能。</p>
+</li>
+</ul>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="http://example.com">Lucky</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="http://example.com/2025/11/26/ret2dlllresolve_1/">http://example.com/2025/11/26/ret2dlllresolve_1/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="http://example.com" target="_blank">Lucky</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/ctf/">ctf</a></div><div class="post-share"><div class="social-share" data-image="/img/butterfly-icon.png" data-sites="facebook,x,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related full-width" href="/2025/11/25/BROP/" title="BROP的学习"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">BROP的学习</div></div><div class="info-2"><div class="info-item-1">BROP的学习 什么是BROPBROP，全称为“BlindROP”，指的是当我们无法获取二进制文件的情况下利用ROP攻击远程的目标，劫持其控制流。难点就在于我们无法知道任何代码且该程序可能被现有的一些保护机制所保护，如NX,ASLR,PIE和CANARY，同时我们无法得知该机器是32位还是64位。 BROP的利用前置条件：想要使用BROP，有两个条件：  1.程序必须有一个已知漏洞（如栈溢出或格式化字符串），攻击者必须知道如何利用该漏洞。  2.应用程序在crash后会重新启动，且重启后不会有re-rand（ASLR不会重新进行），如nginx，MySQL，Apache，OpenSSH，Samba都满足该条件。   必要知识： 1  stop_gadget：一般情况下，return address指向一个任意指令时，程序很有可能停止执行（包括报错和能执行但退出），但有另一种情况，即当return address指向某一指令时，程序不会退出而是进入无限循环，使攻击者一直处于连接状态，这种gadget就称为stop_gadget，利用stop_gadget做payload的末尾我们就...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related no-desc" href="/2025/11/02/2025winter/" title="2025 Winter 冬季培养 round1"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-11-02</div><div class="info-item-2">2025 Winter 冬季培养 round1</div></div></div></a><a class="pagination-related" href="/2025/11/01/geek-challenge/" title="geek_challenge"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-11-01</div><div class="info-item-2">geek_challenge</div></div><div class="info-2"><div class="info-item-1">极客大挑战web1 阿里纳斯追乌龟 在古希腊，英雄阿基里斯和一只乌龟赛跑。阿基里斯的速度是乌龟的十倍。比赛开始时，乌龟在阿基里斯前面100米。芝诺悖论认为，当阿基里斯追到乌龟的出发点时，乌龟已经又向前爬了一段距离。当阿基里斯再追到那个位置时，乌龟又向前爬了。如此无限循环，阿基里斯似乎永远也追不上乌龟。他真的追不上吗？  解法：进入环境，会发现有一个追赶button, 用burpsuite抓包后得到一段 base64加密 的data, 解密后修改前面的值大于后面的值即可拿到flag。 2   Misc1 HTTP 管理员抓到一段可疑的流量，请从中还原被窃取的信息。  解法：下载pcapng附件, 使用wireshark打开, 发现存在三个带有参数d, s, r的三个GET请求 , 仔细观察可以发现d的参数是base64加密后的flag, 分别对U1lDe1JfVV9BXw&#x3D;&#x3D;, RjBSM05TMUM1, X01BU1RFUj99, 进行解码, 拼接后就是flag。 2 🗃️🗃️ GSBP师傅在外出比赛结束后，打算到当地景点游览一番，他到了一个景点之后，感觉...</div></div></div></a><a class="pagination-related" href="/2025/11/25/BROP/" title="BROP的学习"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-11-25</div><div class="info-item-2">BROP的学习</div></div><div class="info-2"><div class="info-item-1">BROP的学习 什么是BROPBROP，全称为“BlindROP”，指的是当我们无法获取二进制文件的情况下利用ROP攻击远程的目标，劫持其控制流。难点就在于我们无法知道任何代码且该程序可能被现有的一些保护机制所保护，如NX,ASLR,PIE和CANARY，同时我们无法得知该机器是32位还是64位。 BROP的利用前置条件：想要使用BROP，有两个条件：  1.程序必须有一个已知漏洞（如栈溢出或格式化字符串），攻击者必须知道如何利用该漏洞。  2.应用程序在crash后会重新启动，且重启后不会有re-rand（ASLR不会重新进行），如nginx，MySQL，Apache，OpenSSH，Samba都满足该条件。   必要知识： 1  stop_gadget：一般情况下，return address指向一个任意指令时，程序很有可能停止执行（包括报错和能执行但退出），但有另一种情况，即当return address指向某一指令时，程序不会退出而是进入无限循环，使攻击者一直处于连接状态，这种gadget就称为stop_gadget，利用stop_gadget做payload的末尾我们就...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/img/butterfly-icon.png" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">Lucky</div><div class="author-info-description">记录做题过程</div><div class="site-data"><a href="/archives/"><div class="headline">文章</div><div class="length-num">4</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">1</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">0</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/xxxxxx"><i class="fab fa-github"></i><span>Follow Me</span></a></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">This is my Blog</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E6%A6%82%E5%BF%B5%E5%85%88%E8%A1%8C"><span class="toc-number">1.</span> <span class="toc-text">核心概念先行</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AF%A6%E7%BB%86%E9%87%8D%E5%AE%9A%E4%BD%8D%E8%BF%87%E7%A8%8B%EF%BC%88%E4%BB%A5-printf-%E4%B8%BA%E4%BE%8B%EF%BC%89"><span class="toc-number">1.1.</span> <span class="toc-text">详细重定位过程（以 printf 为例）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%98%B6%E6%AE%B5%E4%B8%80%EF%BC%9A%E7%A8%8B%E5%BA%8F%E5%90%AF%E5%8A%A8%E4%B8%8E%E5%88%9D%E5%A7%8B%E9%87%8D%E5%AE%9A%E4%BD%8D"><span class="toc-number">1.1.1.</span> <span class="toc-text">阶段一：程序启动与初始重定位</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%98%B6%E6%AE%B5%E4%BA%8C%EF%BC%9A%E7%AC%AC%E4%B8%80%E6%AC%A1%E8%B0%83%E7%94%A8-printf-%E2%80%94%E2%80%94-%E5%BB%B6%E8%BF%9F%E7%BB%91%E5%AE%9A%E7%9A%84%E9%AD%94%E5%8A%9B"><span class="toc-number">1.1.2.</span> <span class="toc-text">阶段二：第一次调用 printf —— 延迟绑定的魔力</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%98%B6%E6%AE%B5%E4%B8%89%EF%BC%9A%E5%90%8E%E7%BB%AD%E6%89%80%E6%9C%89%E5%AF%B9-printf-%E7%9A%84%E8%B0%83%E7%94%A8"><span class="toc-number">1.1.3.</span> <span class="toc-text">阶段三：后续所有对 printf 的调用</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93%E4%B8%8E%E8%A6%81%E7%82%B9"><span class="toc-number">1.2.</span> <span class="toc-text">总结与要点</span></a></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2025/11/26/ret2dlllresolve_1/" title="ret2dllresolve学习-1">ret2dllresolve学习-1</a><time datetime="2025-11-26T15:27:00.000Z" title="发表于 2025-11-26 23:27:00">2025-11-26</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2025/11/25/BROP/" title="BROP的学习">BROP的学习</a><time datetime="2025-11-25T14:00:00.000Z" title="发表于 2025-11-25 22:00:00">2025-11-25</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2025/11/02/2025winter/" title="2025 Winter 冬季培养 round1">2025 Winter 冬季培养 round1</a><time datetime="2025-11-02T15:56:00.000Z" title="发表于 2025-11-02 23:56:00">2025-11-02</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2025/11/01/geek-challenge/" title="geek_challenge">geek_challenge</a><time datetime="2025-11-01T02:54:15.000Z" title="发表于 2025-11-01 10:54:15">2025-11-01</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2025 By Lucky</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo 8.1.1</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.5.1</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js?v=5.5.1"></script><script src="/js/main.js?v=5.5.1"></script><div class="js-pjax"></div><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script></div></body></html>
