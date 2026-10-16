@@ -20,6 +20,7 @@ const assetBase = import.meta.env.BASE_URL;
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <link rel="icon" type="image/svg+xml" href={`${assetBase}favicon.svg`} />
+    <noscript><style>.reveal { opacity: 1; transform: none; }</style></noscript>
   </head>
   <body>
     <div class="bg" style={`--bg-image:url('${assetBase}bg.jpg')`} aria-hidden="true"></div>
@@ -32,33 +33,56 @@ const assetBase = import.meta.env.BASE_URL;
       </main>
       <SiteFooter />
     </div>
+    <script>
+      // 滚动浮现：进入视口的 .reveal 元素加 .in（缓慢浮起）
+      const reveals = Array.from(document.querySelectorAll('.reveal'));
+      const show = (el) => el.classList.add('in');
+
+      // 几何兜底：只判断元素是否进入视口，不看"可见比例"。
+      // 长文章整体就是一个 .reveal，用比例阈值（如 0.15）在视口偏小时永远达不到，
+      // 会导致正文永久不可见，所以这里必须用不带比例的方式。
+      const inView = (el) => {
+        const r = el.getBoundingClientRect();
+        return r.top < innerHeight * 0.92 && r.bottom > 0;
+      };
+      const sweep = () => {
+        for (const el of reveals) {
+          if (!el.classList.contains('in') && inView(el)) show(el);
+        }
+      };
+
+      if ('IntersectionObserver' in window) {
+        const io = new IntersectionObserver(
+          (entries) => {
+            for (const e of entries) {
+              if (e.isIntersecting) {
+                show(e.target);
+                io.unobserve(e.target);
+              }
+            }
+          },
+          { threshold: 0, rootMargin: '0px 0px -8% 0px' }
+        );
+        reveals.forEach((el) => io.observe(el));
+      }
+
+      // 无论上面是否生效，load/滚动/缩放时都再兜一次，保证内容一定会出现
+      sweep();
+      addEventListener('load', () => { sweep(); requestAnimationFrame(sweep); });
+      addEventListener('scroll', sweep, { passive: true });
+      addEventListener('resize', sweep);
+
+      // 顶部阅读进度条
+      const bar = document.getElementById('progress');
+      if (bar) {
+        const update = () => {
+          const d = document.documentElement;
+          const max = d.scrollHeight - d.clientHeight;
+          bar.style.width = max > 0 ? `${(d.scrollTop / max) * 100}%` : '0';
+        };
+        addEventListener('scroll', update, { passive: true });
+        update();
+      }
+    </script>
   </body>
 </html>
-
-<script>
-  // 滚动浮现：进入视口的 .reveal 元素加 .in（缓慢浮起）
-  const io = new IntersectionObserver(
-    (entries) => {
-      for (const e of entries) {
-        if (e.isIntersecting) {
-          e.target.classList.add('in');
-          io.unobserve(e.target);
-        }
-      }
-    },
-    { threshold: 0.15, rootMargin: '0px 0px -8% 0px' }
-  );
-  document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
-
-  // 顶部阅读进度条
-  const bar = document.getElementById('progress');
-  if (bar) {
-    const update = () => {
-      const d = document.documentElement;
-      const max = d.scrollHeight - d.clientHeight;
-      bar.style.width = max > 0 ? `${(d.scrollTop / max) * 100}%` : '0';
-    };
-    document.addEventListener('scroll', update, { passive: true });
-    update();
-  }
-</script>

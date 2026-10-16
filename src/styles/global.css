@@ -388,7 +388,8 @@ main { position: relative; }
   font-family: var(--font-serif);
   font-size: clamp(1.8rem, 5vw, 2.5rem);
   letter-spacing: 0.1em;
-  margin: 40px 0 8px;
+  /* 顶部固定导航条高约 74px（top:16px + 高度），标题上边距必须让开它 */
+  margin: 110px 0 8px;
   background: linear-gradient(110deg, #fff3d6, var(--gold) 40%, var(--rose) 75%);
   -webkit-background-clip: text;
   background-clip: text;
