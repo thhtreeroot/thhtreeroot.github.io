@@ -220,11 +220,14 @@ main { position: relative; }
 .stage { position: relative; }
 .layer { position: relative; }
 .js .stage { height: 175vh; height: 175svh; }
-.js .layer { position: sticky; top: 0; will-change: opacity; }
+.js .layer { position: sticky; top: 0; will-change: opacity; transition: opacity 0.5s ease; }
 .js .hero-layer { z-index: 1; height: 100vh; height: 100svh; }
 .js .posts-layer {
   z-index: 2;
-  /* 拉回与标题层同一屏，随滚动在原地淡入 */
+  /* 初始为"标题态"：内容层隐藏且不可交互（切换由脚本按阈值锁定） */
+  opacity: 0;
+  pointer-events: none;
+  /* 拉回与标题层同一屏，在原地淡入 */
   margin-top: -100vh;
   margin-top: -100svh;
   padding-top: 11vh;
