@@ -49,6 +49,8 @@ const assetBase = import.meta.env.BASE_URL;
       // 所有页面动效在这里统一初始化。astro:page-load 在首次加载和每次视图过渡
       // 完成后都会触发，因此 ClientRouter 换页后动效依然生效。
       function initPage() {
+        // 再补一次保险：动效开关必须始终在 <html> 上
+        document.documentElement.classList.add('js');
         document.documentElement.setAttribute('data-anim-ready', '1');
 
         // 1) 滚动浮现：进入视口的 .reveal 元素加 .in（只改透明度，不做位移）
@@ -158,6 +160,13 @@ const assetBase = import.meta.env.BASE_URL;
         }
       }
 
+      // ClientRouter 换页时会整体替换 <html>，运行时加上的 .js 类会被丢掉，
+      // 导致换页后（比如从文章返回首页）所有动效样式失效、退化成普通排布。
+      // astro:after-swap 在"新页面已换入、视图过渡渲染之前"触发，在这里补回来，
+      // 既修好失效问题，也不会闪回无动效的排布。
+      document.addEventListener('astro:after-swap', () => {
+        document.documentElement.classList.add('js');
+      });
       document.addEventListener('astro:page-load', initPage);
     </script>
   </body>
