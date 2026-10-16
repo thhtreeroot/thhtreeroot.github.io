@@ -214,32 +214,21 @@ main { position: relative; }
   from { opacity: 0; transform: translateY(34px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.scroll-hint {
-  margin-top: 10vh;
-  display: flex; flex-direction: column; align-items: center; gap: 10px;
-  color: var(--ink-faint);
-  font-size: 0.82rem;
-  letter-spacing: 0.3em;
-  animation: rise 1.4s var(--ease) 1.5s both;
-}
-.scroll-hint .rail {
-  width: 1px; height: 54px;
-  background: linear-gradient(180deg, var(--gold), transparent);
-  position: relative;
-  overflow: hidden;
-}
-.scroll-hint .rail::after {
-  content: "";
-  position: absolute; left: -1.5px; top: -8px;
-  width: 4px; height: 12px; border-radius: 4px;
-  background: var(--rose);
-  box-shadow: 0 0 12px var(--rose);
-  animation: drip 2.2s ease-in-out infinite;
-}
-@keyframes drip {
-  0%   { transform: translateY(-14px); opacity: 0; }
-  30%  { opacity: 1; }
-  100% { transform: translateY(64px); opacity: 0; }
+/* ---------- 首页首屏：标题淡出 / 内容淡入（位置不动） ---------- */
+/* .stage 提供滚动行程；两层 .layer 都钉在视口顶部（sticky），
+   滚动时只改变透明度：标题渐隐、内容渐显，画面里的东西不位移 */
+.stage { position: relative; }
+.layer { position: relative; }
+.js .stage { height: 175vh; height: 175svh; }
+.js .layer { position: sticky; top: 0; will-change: opacity; }
+.js .hero-layer { z-index: 1; height: 100vh; height: 100svh; }
+.js .posts-layer {
+  z-index: 2;
+  /* 拉回与标题层同一屏，随滚动在原地淡入 */
+  margin-top: -100vh;
+  margin-top: -100svh;
+  padding-top: 11vh;
+  padding-top: 11svh;
 }
 
 /* ---------- 按钮 ---------- */
@@ -280,17 +269,13 @@ main { position: relative; }
   box-shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.62);
 }
 
-/* 每个 .reveal 初始沉在下方并透明，滚动进入视野后缓慢浮起 */
+/* 每个 .reveal 初始透明，进入视野后缓慢浮现——只改透明度，不做位移。
+   隐藏状态挂在 .js 之下：没有 JS（或动效脚本没跑起来）时内容始终直接可见 */
 .reveal {
-  opacity: 0;
-  transform: translateY(68px) scale(0.985);
-  transition:
-    opacity 1.25s ease var(--d, 0ms),
-    transform 1.7s var(--ease) var(--d, 0ms),
-    box-shadow 0.5s, border-color 0.5s;
-  will-change: opacity, transform;
+  transition: opacity 1.2s ease var(--d, 0ms);
 }
-.reveal.in { opacity: 1; transform: none; }
+.js .reveal { opacity: 0; will-change: opacity; }
+.js .reveal.in { opacity: 1; }
 
 /* 主阅读面板：底色更实，保证压在图片亮区（天空/建筑）上时正文可读 */
 .glass.solid {
@@ -514,6 +499,12 @@ main { position: relative; }
 }
 .foot a { color: var(--gold); }
 
+/* ---------- 页面切换：旧页面淡出，新页面淡入（Astro 视图过渡） ---------- */
+@keyframes page-out { to { opacity: 0; } }
+@keyframes page-in { from { opacity: 0; } }
+::view-transition-old(root) { animation: page-out 0.4s ease both !important; }
+::view-transition-new(root) { animation: page-in 0.65s ease both !important; }
+
 /* ---------- 响应式 ---------- */
 @media (max-width: 640px) {
   .bar { padding: 8px 16px; gap: 14px; }
@@ -529,5 +520,11 @@ main { position: relative; }
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
-  .reveal { opacity: 1; transform: none; }
+  .js .reveal { opacity: 1; }
+  /* 首屏不做钉住-交叉淡化，回退成普通纵向排布 */
+  .js .stage { height: auto; }
+  .js .layer { position: static; }
+  .js .hero-layer { height: auto; }
+  .js .posts-layer { margin-top: 0; padding-top: 0; opacity: 1 !important; }
+  ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 0.01ms !important; }
 }

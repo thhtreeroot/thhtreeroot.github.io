@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css';
+import { ClientRouter } from 'astro:transitions';
 import SiteHeader from '../components/SiteHeader.astro';
 import SiteFooter from '../components/SiteFooter.astro';
 
@@ -20,7 +21,18 @@ const assetBase = import.meta.env.BASE_URL;
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <link rel="icon" type="image/svg+xml" href={`${assetBase}favicon.svg`} />
-    <noscript><style>.reveal { opacity: 1; transform: none; }</style></noscript>
+    <ClientRouter />
+    <script is:inline>
+      // 动效开关：加在 <html> 上，所有"先隐藏再浮现"的样式都挂在 .js 之下，
+      // 没有 JS 时内容一律直接可见。若主脚本 1.8s 内没能接管（脚本被拦/加载失败），
+      // 自动摘掉开关，保证内容不会因为动效脚本没跑起来而一直隐形。
+      document.documentElement.classList.add('js');
+      setTimeout(function () {
+        if (!document.documentElement.hasAttribute('data-anim-ready')) {
+          document.documentElement.classList.remove('js');
+        }
+      }, 1800);
+    </script>
   </head>
   <body>
     <div class="bg" style={`--bg-image:url('${assetBase}bg.jpg')`} aria-hidden="true"></div>
@@ -34,55 +46,92 @@ const assetBase = import.meta.env.BASE_URL;
       <SiteFooter />
     </div>
     <script>
-      // 滚动浮现：进入视口的 .reveal 元素加 .in（缓慢浮起）
-      const reveals = Array.from(document.querySelectorAll('.reveal'));
-      const show = (el) => el.classList.add('in');
+      // 所有页面动效在这里统一初始化。astro:page-load 在首次加载和每次视图过渡
+      // 完成后都会触发，因此 ClientRouter 换页后动效依然生效。
+      function initPage() {
+        document.documentElement.setAttribute('data-anim-ready', '1');
 
-      // 几何兜底：只判断元素是否进入视口，不看"可见比例"。
-      // 长文章整体就是一个 .reveal，用比例阈值（如 0.15）在视口偏小时永远达不到，
-      // 会导致正文永久不可见，所以这里必须用不带比例的方式。
-      const inView = (el) => {
-        const r = el.getBoundingClientRect();
-        return r.top < innerHeight * 0.92 && r.bottom > 0;
-      };
-      const sweep = () => {
-        for (const el of reveals) {
-          if (!el.classList.contains('in') && inView(el)) show(el);
-        }
-      };
-
-      if ('IntersectionObserver' in window) {
-        const io = new IntersectionObserver(
-          (entries) => {
-            for (const e of entries) {
-              if (e.isIntersecting) {
-                show(e.target);
-                io.unobserve(e.target);
-              }
-            }
-          },
-          { threshold: 0, rootMargin: '0px 0px -8% 0px' }
-        );
-        reveals.forEach((el) => io.observe(el));
-      }
-
-      // 无论上面是否生效，load/滚动/缩放时都再兜一次，保证内容一定会出现
-      sweep();
-      addEventListener('load', () => { sweep(); requestAnimationFrame(sweep); });
-      addEventListener('scroll', sweep, { passive: true });
-      addEventListener('resize', sweep);
-
-      // 顶部阅读进度条
-      const bar = document.getElementById('progress');
-      if (bar) {
-        const update = () => {
-          const d = document.documentElement;
-          const max = d.scrollHeight - d.clientHeight;
-          bar.style.width = max > 0 ? `${(d.scrollTop / max) * 100}%` : '0';
+        // 1) 滚动浮现：进入视口的 .reveal 元素加 .in（只改透明度，不做位移）
+        const reveals = Array.from(document.querySelectorAll('.reveal'));
+        const show = (el) => el.classList.add('in');
+        // 几何兜底：只判断元素是否进入视口，不看"可见比例"。
+        // 长文章整体就是一个 .reveal，用比例阈值（如 0.15）在视口偏小时永远达不到，
+        // 会导致正文永久不可见，所以这里必须用不带比例的方式。
+        const inView = (el) => {
+          const r = el.getBoundingClientRect();
+          return r.top < innerHeight * 0.94 && r.bottom > 0;
         };
-        addEventListener('scroll', update, { passive: true });
-        update();
+        const sweep = () => {
+          for (const el of reveals) {
+            if (!el.classList.contains('in') && inView(el)) show(el);
+          }
+        };
+
+        if ('IntersectionObserver' in window) {
+          const io = new IntersectionObserver(
+            (entries) => {
+              for (const e of entries) {
+                if (e.isIntersecting) {
+                  show(e.target);
+                  io.unobserve(e.target);
+                }
+              }
+            },
+            { threshold: 0, rootMargin: '0px 0px -6% 0px' }
+          );
+          reveals.forEach((el) => io.observe(el));
+        }
+
+        // 无论上面是否生效，load/滚动/缩放时都再兜一次，保证内容一定会出现
+        sweep();
+        addEventListener('load', () => { sweep(); requestAnimationFrame(sweep); });
+        addEventListener('scroll', sweep, { passive: true });
+        addEventListener('resize', sweep);
+
+        // 2) 首页：标题层与内容层钉住不动，随滚动交叉淡化（只有透明度变化）
+        const heroLayer = document.getElementById('hero-layer');
+        const postsLayer = document.getElementById('posts-layer');
+        const stage = document.querySelector('.stage');
+        const animOn = document.documentElement.classList.contains('js');
+        if (heroLayer && postsLayer && stage && animOn && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+          const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
+          // 舞台高度 = 内容层高度 + 0.75 屏。内容比一屏高时（手机）也保证两层都能钉住：
+          // 交叉淡化在钉住期间完成，画面不动；之后恢复普通滚动。
+          const sizeStage = () => {
+            stage.style.height = `${Math.round(postsLayer.offsetHeight + innerHeight * 0.75)}px`;
+          };
+          const updateFade = () => {
+            const vh = innerHeight;
+            const s = scrollY;
+            const out = clamp01(s / (vh * 0.62)); // 标题淡出：0 → 0.62 屏
+            const fin = clamp01((s - vh * 0.1) / (vh * 0.45)); // 内容淡入：0.10 → 0.55 屏
+            heroLayer.style.opacity = String(1 - out);
+            heroLayer.style.visibility = out > 0.985 ? 'hidden' : '';
+            postsLayer.style.opacity = String(fin);
+            // 还没开始显现时彻底隐藏：既不让它挡住标题层的按钮，也不让读屏器读到
+            postsLayer.style.visibility = fin < 0.015 ? 'hidden' : '';
+          };
+          addEventListener('scroll', updateFade, { passive: true });
+          addEventListener('resize', () => { sizeStage(); updateFade(); });
+          addEventListener('load', sizeStage);
+          sizeStage();
+          updateFade();
+        }
+
+        // 3) 顶部阅读进度条
+        const bar = document.getElementById('progress');
+        if (bar) {
+          const updateBar = () => {
+            const d = document.documentElement;
+            const max = d.scrollHeight - d.clientHeight;
+            bar.style.width = max > 0 ? `${(d.scrollTop / max) * 100}%` : '0';
+          };
+          addEventListener('scroll', updateBar, { passive: true });
+          updateBar();
+        }
       }
+
+      document.addEventListener('astro:page-load', initPage);
     </script>
   </body>
 </html>
