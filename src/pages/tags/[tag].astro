@@ -1,0 +1,28 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PostCard from '../../components/PostCard.astro';
+
+export async function getStaticPaths() {
+  const posts = (await getCollection('blog', ({ data }) => !data.draft))
+    .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
+  const tags = new Set<string>();
+  for (const p of posts) for (const t of p.data.tags) tags.add(t);
+  return Array.from(tags).map((tag) => ({
+    params: { tag },
+    props: { tag, posts: posts.filter((p) => p.data.tags.includes(tag)) },
+  }));
+}
+
+const { tag, posts } = Astro.props;
+---
+<BaseLayout title={`标签「${tag}」 · 拾遗集`}>
+  <div class="wrap">
+    <h1 class="page-title"># {tag}</h1>
+    <p class="page-sub">该标签下共 {posts.length} 篇。</p>
+    <div class="grid">
+      {posts.map((post, i) => <PostCard post={post} delay={(i % 3) * 140} />)}
+    </div>
+    <div style="height:60px"></div>
+  </div>
+</BaseLayout>

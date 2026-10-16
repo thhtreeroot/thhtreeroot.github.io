@@ -1,0 +1,9 @@
+dist/
+.astro/
+node_modules/
+backup/
+npm-debug.log*
+.env
+.env.production
+.DS_Store
+Thumbs.db

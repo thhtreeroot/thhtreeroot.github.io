@@ -1,0 +1,25 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+<BaseLayout title="关于 · 拾遗集" description="关于拾遗集：作者、内容与技术栈。">
+  <div class="narrow">
+    <h1 class="page-title">关于</h1>
+    <article class="glass solid reveal" style="padding:clamp(28px,5vw,52px);margin-bottom:70px;">
+      <div class="prose">
+        <p>你好，欢迎来到<strong>拾遗集</strong>。「拾遗」是捡拾被遗漏的东西——题目里漏掉的知识点，课堂上走神漏掉的内容，在这里一篇篇捡回来。</p>
+        <blockquote><p>「人类的悲欢并不相通，我只觉得他们吵闹。」—— 鲁迅《小杂感》</p></blockquote>
+        <p>深夜对着一道题卡住的那种心跳，别人大概不会懂。那就写下来说不定有人懂——这正是这个博客存在的全部理由。</p>
+        <h2>这里写什么</h2>
+        <ul>
+          <li><strong>CTF 题解与知识树</strong> —— Web、Crypto、Pwn、Misc，从入门题到比赛复盘；</li>
+          <li><strong>计算机基础</strong> —— 网络、操作系统、编译原理的「人话版」笔记；</li>
+          <li><strong>工具与折腾</strong> —— Linux、编辑器、脚本，以及这个博客本身的重构记录。</li>
+        </ul>
+        <h2>关于站点</h2>
+        <p>背景是一片动画风格的黄昏港湾。技术上使用 <a href="https://astro.build" target="_blank" rel="noreferrer">Astro</a> 构建，文章以 Markdown 存放在仓库，通过 GitHub Actions 自动部署到 GitHub Pages。</p>
+        <h2>找到我</h2>
+        <p>GitHub：<a href="https://github.com/thhtreeroot" target="_blank" rel="noreferrer">@thhtreeroot</a> · 欢迎勘误，出题人除外。</p>
+      </div>
+    </article>
+  </div>
+</BaseLayout>

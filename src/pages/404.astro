@@ -1,0 +1,13 @@
+---
+import { b } from '../utils/base';
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+<BaseLayout title="404 · 这页随晚霞飘走了">
+  <section class="hero">
+    <h1 class="hero-title">404</h1>
+    <p class="hero-sub">这片港湾里找不到你要的那页——它可能随晚霞飘走了。</p>
+    <div class="hero-cta">
+      <a class="btn" href={b('/')}>回首页看落日</a>
+    </div>
+  </section>
+</BaseLayout>

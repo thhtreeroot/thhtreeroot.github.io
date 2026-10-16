@@ -1,0 +1,52 @@
+---
+import { getCollection, render } from 'astro:content';
+import { b } from '../../utils/base';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+export async function getStaticPaths() {
+  const posts = await getCollection('blog', ({ data }) => !data.draft);
+  return posts.map((post) => ({ params: { slug: post.id }, props: { post } }));
+}
+
+const { post } = Astro.props;
+const { Content } = await render(post);
+
+const all = (await getCollection('blog', ({ data }) => !data.draft))
+  .sort((a, b) => a.data.date.valueOf() - b.data.date.valueOf());
+const idx = all.findIndex((p) => p.id === post.id);
+const prev = idx > 0 ? all[idx - 1] : null;
+const next = idx < all.length - 1 ? all[idx + 1] : null;
+
+const body = post.body ?? '';
+const cjk = (body.match(/[\u4e00-\u9fa5]/g) ?? []).length;
+const en = (body.match(/[A-Za-z0-9_]+/g) ?? []).length;
+const minutes = Math.max(1, Math.ceil(cjk / 400 + en / 200));
+const dateStr = post.data.date.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
+const tone = (i: number) => ['', 'rose', 'violet'][i % 3];
+---
+<BaseLayout title={`${post.data.title} · 拾遗集`} description={post.data.description}>
+  <div class="narrow">
+    <article class="glass solid reveal" style="padding:clamp(28px,5vw,56px);margin:110px 0 70px;">
+      <header class="post-head">
+        <h1>{post.data.title}</h1>
+        <div class="meta">
+          <time datetime={post.data.date.toISOString()}>{dateStr}</time>
+          <span>约 {minutes} 分钟</span>
+          <span style="display:flex;gap:6px;flex-wrap:wrap;">
+            {post.data.tags.map((t, i) => (
+              <a class={`tag ${tone(i)}`} href={b(`/tags/${t}`)}>{t}</a>
+            ))}
+          </span>
+        </div>
+      </header>
+      <hr style="border:none;height:1px;background:var(--line);margin:26px 0;" />
+      <div class="prose">
+        <Content />
+      </div>
+      <nav class="post-nav">
+        {prev ? <a href={prev.url}>← {prev.data.title}</a> : <span></span>}
+        {next ? <a href={next.url}>{next.data.title} →</a> : <span></span>}
+      </nav>
+    </article>
+  </div>
+</BaseLayout>

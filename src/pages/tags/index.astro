@@ -1,0 +1,24 @@
+---
+import { getCollection } from 'astro:content';
+import { b } from '../../utils/base';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+const posts = await getCollection('blog', ({ data }) => !data.draft);
+const counts = new Map<string, number>();
+for (const p of posts) for (const t of p.data.tags) counts.set(t, (counts.get(t) ?? 0) + 1);
+const tags = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+---
+<BaseLayout title="标签 · 拾遗集">
+  <div class="narrow">
+    <h1 class="page-title">标签</h1>
+    <p class="page-sub">按主题翻找：CTF 各方向、计算机基础、建站随笔。</p>
+    <div class="tag-cloud">
+      {tags.map(([tag, n], i) => (
+        <a class="glass tag-big reveal" style={`--d:${i * 90}ms`} href={b(`/tags/${tag}`)}>
+          {tag}<span class="n">{n}</span>
+        </a>
+      ))}
+    </div>
+    <div style="height:60px"></div>
+  </div>
+</BaseLayout>

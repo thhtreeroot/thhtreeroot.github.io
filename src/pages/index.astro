@@ -1,0 +1,34 @@
+---
+import { getCollection } from 'astro:content';
+import { b } from '../utils/base';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PostCard from '../components/PostCard.astro';
+
+const posts = (await getCollection('blog', ({ data }) => !data.draft))
+  .sort((a, b2) => b2.data.date.valueOf() - a.data.date.valueOf());
+const latest = posts.slice(0, 6);
+---
+<BaseLayout title="拾遗集 · CTF 与计算机学习的黄昏笔记" description="拾遗集：人类的悲欢并不相通，我只觉得他们吵闹。一个 CTF 与计算机学习的博客。">
+  <section class="hero">
+    <h1 class="hero-title">拾遗集</h1>
+    <p class="hero-sub">「人类的悲欢并不相通，我只觉得他们吵闹。」<br /><span class="byline">—— 鲁迅《小杂感》</span><br />于是我把解过的题、读过的书，一篇篇拾起来。</p>
+    <div class="hero-cta">
+      <a class="btn" href={b('/blog')}>开始阅读</a>
+      <a class="btn ghost" href={b('/tags')}>逛逛标签</a>
+    </div>
+    <div class="scroll-hint">
+      <span>下滑</span>
+      <i class="rail"></i>
+    </div>
+  </section>
+
+  <section class="wrap">
+    <div class="sec-head reveal">
+      <h2 class="sec-title">最新文章</h2>
+      <a href={b('/blog')}>全部归档 →</a>
+    </div>
+    <div class="grid">
+      {latest.map((post, i) => <PostCard post={post} delay={(i % 3) * 140} />)}
+    </div>
+  </section>
+</BaseLayout>

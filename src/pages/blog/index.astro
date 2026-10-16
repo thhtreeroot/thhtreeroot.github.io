@@ -1,0 +1,35 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+const posts = (await getCollection('blog', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
+
+const byYear = new Map<string, typeof posts>();
+for (const p of posts) {
+  const y = String(p.data.date.getFullYear());
+  byYear.set(y, [...(byYear.get(y) ?? []), p]);
+}
+const fmt = (d: Date) =>
+  `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+---
+<BaseLayout title="文章 · 拾遗集">
+  <div class="narrow">
+    <h1 class="page-title">文章</h1>
+    <p class="page-sub">共 {posts.length} 篇，按时间倒序。</p>
+    {Array.from(byYear.entries()).map(([year, list]) => (
+      <>
+        <h2 class="year reveal">{year}</h2>
+        <div class="reveal">
+          {list.map((p) => (
+            <div class="arc-item">
+              <time>{fmt(p.data.date)}</time>
+              <a href={p.url}>{p.data.title}</a>
+            </div>
+          ))}
+        </div>
+      </>
+    ))}
+    <div style="height:60px"></div>
+  </div>
+</BaseLayout>

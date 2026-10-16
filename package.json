@@ -1,0 +1,15 @@
+{
+  "name": "shiyi-blog",
+  "type": "module",
+  "version": "0.1.0",
+  "description": "拾遗集 —— 黄昏港湾主题的 CTF / 计算机学习博客",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "astro": "^5.0.0"
+  }
+}

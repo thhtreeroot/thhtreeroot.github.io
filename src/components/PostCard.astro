@@ -1,0 +1,24 @@
+---
+import type { CollectionEntry } from 'astro:content';
+import { b } from '../utils/base';
+
+interface Props {
+  post: CollectionEntry<'blog'>;
+  delay?: number;
+}
+const { post, delay = 0 } = Astro.props;
+const dateStr = post.data.date.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
+const tone = (i: number) => ['', 'rose', 'violet'][i % 3];
+---
+<article class="glass card reveal" style={`--d:${delay}ms`}>
+  <h3><a href={post.url}>{post.data.title}</a></h3>
+  <p class="desc">{post.data.description}</p>
+  <div class="foot meta">
+    <time datetime={post.data.date.toISOString()}>{dateStr}</time>
+    <span style="display:flex;gap:6px;flex-wrap:wrap;">
+      {post.data.tags.map((t, i) => (
+        <a class={`tag ${tone(i)}`} href={b(`/tags/${t}`)}>{t}</a>
+      ))}
+    </span>
+  </div>
+</article>
