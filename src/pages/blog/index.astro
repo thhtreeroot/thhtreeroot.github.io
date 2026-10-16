@@ -1,5 +1,6 @@
 ---
 import { getCollection } from 'astro:content';
+import { b } from '../../utils/base';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 
 const posts = (await getCollection('blog', ({ data }) => !data.draft))
@@ -24,7 +25,7 @@ const fmt = (d: Date) =>
           {list.map((p) => (
             <div class="arc-item">
               <time>{fmt(p.data.date)}</time>
-              <a href={p.url}>{p.data.title}</a>
+              <a href={b(`/blog/${p.id}`)}>{p.data.title}</a>
             </div>
           ))}
         </div>

@@ -44,8 +44,8 @@ const tone = (i: number) => ['', 'rose', 'violet'][i % 3];
         <Content />
       </div>
       <nav class="post-nav">
-        {prev ? <a href={prev.url}>← {prev.data.title}</a> : <span></span>}
-        {next ? <a href={next.url}>{next.data.title} →</a> : <span></span>}
+        {prev ? <a href={b(`/blog/${prev.id}`)}>← {prev.data.title}</a> : <span></span>}
+        {next ? <a href={b(`/blog/${next.id}`)}>{next.data.title} →</a> : <span></span>}
       </nav>
     </article>
   </div>
