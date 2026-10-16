@@ -35,9 +35,17 @@ const assetBase = import.meta.env.BASE_URL;
     </script>
   </head>
   <body>
-    <div class="bg" style={`--bg-image:url('${assetBase}bg.jpg')`} aria-hidden="true"></div>
+    <!-- 背景：外层裁切（视差平移时不留边），中层负责鼠标视差平移，内层是图本身（含呼吸动效） -->
+    <div class="bg-stage" aria-hidden="true">
+      <div class="bg-parallax" id="bg-parallax">
+        <div class="bg" style={`--bg-image:url('${assetBase}bg.jpg')`}></div>
+      </div>
+    </div>
     <div class="bg-veil" aria-hidden="true"></div>
     <div class="progress" id="progress" aria-hidden="true"></div>
+    <button class="to-top" id="to-top" type="button" aria-label="回到顶部">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6.4 5.6 12.8l1.3 1.3L12 9l5.1 5.1 1.3-1.3z" fill="currentColor"/></svg>
+    </button>
     <div class="page">
       <SiteHeader />
       <main>
@@ -52,6 +60,11 @@ const assetBase = import.meta.env.BASE_URL;
         // 再补一次保险：动效开关必须始终在 <html> 上
         document.documentElement.classList.add('js');
         document.documentElement.setAttribute('data-anim-ready', '1');
+
+        // 每页把要跑的滚动/缩放/加载处理收集起来，最后统一交给只绑定一次的调度器
+        const onScroll = [];
+        const onResize = [];
+        const onLoad = [];
 
         // 1) 滚动浮现：进入视口的 .reveal 元素加 .in（只改透明度，不做位移）
         const reveals = Array.from(document.querySelectorAll('.reveal'));
@@ -86,9 +99,9 @@ const assetBase = import.meta.env.BASE_URL;
 
         // 无论上面是否生效，load/滚动/缩放时都再兜一次，保证内容一定会出现
         sweep();
-        addEventListener('load', () => { sweep(); requestAnimationFrame(sweep); });
-        addEventListener('scroll', sweep, { passive: true });
-        addEventListener('resize', sweep);
+        onLoad.push(() => { sweep(); requestAnimationFrame(sweep); });
+        onScroll.push(sweep);
+        onResize.push(sweep);
 
         // 2) 首页：标题层与内容层钉住不动；越过阈值后锁定状态，用 0.5s 淡入淡出切换
         const heroLayer = document.getElementById('hero-layer');
@@ -131,7 +144,7 @@ const assetBase = import.meta.env.BASE_URL;
             }
           };
 
-          const onScroll = () => {
+          const checkThreshold = () => {
             if (locked) return;
             const p = scrollY / (innerHeight * BAND);
             if (p >= DOWN) applyState('content');
@@ -140,24 +153,74 @@ const assetBase = import.meta.env.BASE_URL;
 
           // 初始标题态：内容层不可交互，也不会被读屏器读到
           if ('inert' in HTMLElement.prototype) postsLayer.inert = true;
-          addEventListener('scroll', onScroll, { passive: true });
-          addEventListener('resize', () => { sizeStage(); locked = false; onScroll(); });
-          addEventListener('load', sizeStage);
+          onScroll.push(checkThreshold);
+          onResize.push(() => { sizeStage(); locked = false; checkThreshold(); });
+          onLoad.push(sizeStage);
           sizeStage();
-          onScroll();
         }
 
         // 3) 顶部阅读进度条
         const bar = document.getElementById('progress');
         if (bar) {
-          const updateBar = () => {
+          onScroll.push(() => {
             const d = document.documentElement;
             const max = d.scrollHeight - d.clientHeight;
             bar.style.width = max > 0 ? `${(d.scrollTop / max) * 100}%` : '0';
-          };
-          addEventListener('scroll', updateBar, { passive: true });
-          updateBar();
+          });
         }
+
+        // 4) 右下角「回到顶部」：滚过一屏后浮现
+        const toTop = document.getElementById('to-top');
+        if (toTop) {
+          const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+          toTop.onclick = () => scrollTo({ top: 0, behavior: reduced() ? 'instant' : 'smooth' });
+          const syncTop = () => {
+            const shown = scrollY > innerHeight * 0.6;
+            toTop.classList.toggle('show', shown);
+            if ('inert' in HTMLElement.prototype) toTop.inert = !shown;
+          };
+          onScroll.push(syncTop);
+          onResize.push(syncTop);
+        }
+
+        // 5) 背景视差：鼠标左移 → 背景右移（反向跟随）。
+        //    只绑定一次，取元素时每帧现查，换页后自动作用于新的背景节点
+        if (!window.__bgParallaxBound && matchMedia('(hover: hover)').matches && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+          window.__bgParallaxBound = true;
+          const MAX_X = 26;
+          const MAX_Y = 12;
+          let tx = 0;
+          let ty = 0;
+          let raf = 0;
+          const paint = () => {
+            raf = 0;
+            const el = document.getElementById('bg-parallax');
+            if (el) el.style.transform = `translate3d(${tx.toFixed(1)}px, ${ty.toFixed(1)}px, 0)`;
+          };
+          const aim = (x, y) => {
+            tx = -(x / innerWidth - 0.5) * MAX_X;
+            ty = -(y / innerHeight - 0.5) * MAX_Y;
+            if (!raf) raf = requestAnimationFrame(paint);
+          };
+          document.addEventListener('mousemove', (e) => aim(e.clientX, e.clientY), { passive: true });
+          document.addEventListener('mouseleave', () => { tx = 0; ty = 0; if (!raf) raf = requestAnimationFrame(paint); });
+        }
+
+        // 调度器：滚动/缩放/加载全局只绑定一次，换页时替换为当前页面的处理，
+        // 避免 ClientRouter 反复换页后监听器越堆越多
+        window.__page = {
+          onScroll: () => { for (const fn of onScroll) fn(); },
+          onResize: () => { for (const fn of onResize) fn(); },
+          onLoad: () => { for (const fn of onLoad) fn(); },
+        };
+        if (!window.__pageBound) {
+          window.__pageBound = true;
+          addEventListener('scroll', () => window.__page.onScroll(), { passive: true });
+          addEventListener('resize', () => { window.__page.onResize(); window.__page.onScroll(); });
+          addEventListener('load', () => window.__page.onLoad());
+        }
+        window.__page.onResize();
+        window.__page.onScroll();
       }
 
       // ClientRouter 换页时会整体替换 <html>，运行时加上的 .js 类会被丢掉，

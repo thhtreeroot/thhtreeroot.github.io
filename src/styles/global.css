@@ -49,11 +49,24 @@ body {
 a { color: inherit; text-decoration: none; }
 ::selection { background: rgba(255, 158, 196, 0.4); }
 
-/* ---------- 背景层 ---------- */
-.bg {
+/* ---------- 背景层（含鼠标视差） ---------- */
+/* 三层各司其职：外层固定并裁切，中层随鼠标反向平移，内层是图本身（呼吸动效） */
+.bg-stage {
   position: fixed;
-  inset: -70px;                 /* 预放大一圈，呼吸缩放时不露边 */
+  inset: 0;
   z-index: -2;
+  overflow: hidden;             /* 裁掉视差平移可能露出的边缘 */
+  pointer-events: none;
+}
+.bg-parallax {
+  position: absolute;
+  inset: -70px;                 /* 预放大一圈：视差平移与呼吸缩放都不露边 */
+  transition: transform 0.7s var(--ease);
+  will-change: transform;
+}
+.bg {
+  position: absolute;
+  inset: 0;
   /* 第一层：贴在图片底缘的渐隐带（消除图与衔接色的分界线）；第二层：背景图 */
   background-image:
     linear-gradient(180deg, transparent 8%, var(--bg-seam) 86%),
@@ -104,6 +117,35 @@ a { color: inherit; text-decoration: none; }
   background: linear-gradient(90deg, var(--gold), var(--rose), var(--violet));
   box-shadow: 0 0 14px rgba(255, 208, 142, 0.9);
 }
+
+/* ---------- 回到顶部 ---------- */
+.to-top {
+  position: fixed;
+  right: clamp(16px, 2.6vw, 34px);
+  bottom: clamp(16px, 2.6vw, 34px);
+  z-index: 75;
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--glass);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  box-shadow: 0 18px 46px -18px rgba(0, 0, 0, 0.55);
+  color: var(--ink-dim);
+  cursor: pointer;
+  /* 默认收起，滚过一屏后 .show 浮现 */
+  opacity: 0;
+  transform: translateY(10px);
+  pointer-events: none;
+  transition: opacity 0.45s ease, transform 0.45s var(--ease), color 0.3s, border-color 0.3s;
+}
+.to-top.show { opacity: 1; transform: none; pointer-events: auto; }
+.to-top:hover { color: var(--gold); border-color: rgba(255, 208, 142, 0.5); }
+.to-top:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+.to-top svg { width: 20px; height: 20px; display: block; }
 
 /* ---------- 导航 ---------- */
 .bar {
